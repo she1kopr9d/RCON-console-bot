@@ -74,8 +74,19 @@ async def execute_rcon_command(server: Dict, command: str) -> str:
         with MCRcon(server['host'], server['password'], port=server['port']) as mcr:
             response = mcr.command(command)
             return response
+    except ConnectionRefusedError:
+        return "❌ Ошибка подключения: сервер недоступен или RCON отключен.\n\n" \
+               "Проверьте:\n" \
+               "1. Сервер запущен\n" \
+               "2. RCON включен в server.properties\n" \
+               "3. Порт RCON открыт\n" \
+               "4. IP и порт указаны верно"
+    except TimeoutError:
+        return "❌ Ошибка: время ожидания ответа истекло.\n" \
+               "Сервер не отвечает на запросы RCON."
     except Exception as e:
-        return f"Error executing command: {str(e)}"
+        return f"❌ Ошибка выполнения команды: {str(e)}\n\n" \
+               "Проверьте настройки подключения к серверу."
 
 def get_servers_keyboard(user_id: int) -> InlineKeyboardBuilder:
     user_servers = get_user_servers(user_id)
@@ -197,6 +208,11 @@ async def handle_console_command(message: Message, state: FSMContext):
     
     response = await execute_rcon_command(server, message.text)
     await message.answer(f"Ответ сервера:\n{response}")
+    
+    # Показываем подсказку о закрытии консоли
+    await message.answer(
+        "📟 Консоль активна. Отправьте /close для закрытия консоли."
+    )
 
 @dp.callback_query(F.data.startswith("delete_server_"))
 async def delete_server(callback: CallbackQuery):
@@ -230,6 +246,24 @@ async def server_status(callback: CallbackQuery):
     
     response = await execute_rcon_command(server, "list")
     await callback.message.edit_text(f"Статус сервера:\n{response}")
+    
+    # Возврат к меню сервера
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔄 Статус сервера", callback_data=f"server_status_{server_id}")
+    builder.button(text="👥 Игроки онлайн", callback_data=f"server_players_{server_id}")
+    builder.button(text="⚙️ Выполнить команду", callback_data=f"server_cmd_{server_id}")
+    builder.button(text="📟 Открыть консоль", callback_data=f"open_console_{server_id}")
+    builder.button(text="❌ Удалить сервер", callback_data=f"delete_server_{server_id}")
+    builder.button(text="🔙 Назад", callback_data="back_to_servers")
+    builder.adjust(1)
+    
+    await callback.message.answer(
+        f"🎮 Сервер: {server['name']}\n"
+        f"🌐 Адрес: {server['host']}\n"
+        f"🔌 Порт: {server['port']}\n\n"
+        "Выберите действие:",
+        reply_markup=builder.as_markup()
+    )
 
 @dp.callback_query(F.data.startswith("server_players_"))
 async def server_players(callback: CallbackQuery):
@@ -243,6 +277,24 @@ async def server_players(callback: CallbackQuery):
     
     response = await execute_rcon_command(server, "list")
     await callback.message.edit_text(f"Игроки онлайн:\n{response}")
+    
+    # Возврат к меню сервера
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔄 Статус сервера", callback_data=f"server_status_{server_id}")
+    builder.button(text="👥 Игроки онлайн", callback_data=f"server_players_{server_id}")
+    builder.button(text="⚙️ Выполнить команду", callback_data=f"server_cmd_{server_id}")
+    builder.button(text="📟 Открыть консоль", callback_data=f"open_console_{server_id}")
+    builder.button(text="❌ Удалить сервер", callback_data=f"delete_server_{server_id}")
+    builder.button(text="🔙 Назад", callback_data="back_to_servers")
+    builder.adjust(1)
+    
+    await callback.message.answer(
+        f"🎮 Сервер: {server['name']}\n"
+        f"🌐 Адрес: {server['host']}\n"
+        f"🔌 Порт: {server['port']}\n\n"
+        "Выберите действие:",
+        reply_markup=builder.as_markup()
+    )
 
 @dp.callback_query(F.data.startswith("server_cmd_"))
 async def server_cmd(callback: CallbackQuery, state: FSMContext):
@@ -292,10 +344,23 @@ async def handle_command(message: Message, state: FSMContext):
     await message.answer(f"Ответ сервера:\n{response}")
     
     await state.clear()
-    keyboard = get_servers_keyboard(message.from_user.id)
+    
+    # Возврат к меню сервера
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔄 Статус сервера", callback_data=f"server_status_{server_id}")
+    builder.button(text="👥 Игроки онлайн", callback_data=f"server_players_{server_id}")
+    builder.button(text="⚙️ Выполнить команду", callback_data=f"server_cmd_{server_id}")
+    builder.button(text="📟 Открыть консоль", callback_data=f"open_console_{server_id}")
+    builder.button(text="❌ Удалить сервер", callback_data=f"delete_server_{server_id}")
+    builder.button(text="🔙 Назад", callback_data="back_to_servers")
+    builder.adjust(1)
+    
     await message.answer(
-        "Выберите сервер для управления или добавьте новый:",
-        reply_markup=keyboard.as_markup()
+        f"🎮 Сервер: {server['name']}\n"
+        f"🌐 Адрес: {server['host']}\n"
+        f"🔌 Порт: {server['port']}\n\n"
+        "Выберите действие:",
+        reply_markup=builder.as_markup()
     )
 
 @dp.callback_query(F.data == "add_server")
